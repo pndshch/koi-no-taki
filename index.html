@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>鯉の滝登り — 登竜門の伝説</title>
+<meta name="description" content="5月5日 こどもの日。鯉のぼりと「登竜門」の伝説に触れるブラウザゲーム。">
+<meta name="theme-color" content="#0a4f8c">
+<meta property="og:title" content="鯉の滝登り — 登竜門の伝説">
+<meta property="og:description" content="鯉となって滝を登れ。龍門を越えれば、龍となる。">
+<meta property="og:type" content="website">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body {
+  width:100%; height:100%; overflow:hidden;
+  background:#02111e; color:#fff;
+  font-family:'Hiragino Sans','Yu Gothic','Helvetica Neue',Arial,sans-serif;
+  user-select:none; -webkit-user-select:none; touch-action:none; overscroll-behavior:none;
+}
+#stage {
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(circle at 50% 30%, #0d3a66 0%, #02111e 90%);
+}
+canvas {
+  display:block;
+  background:linear-gradient(180deg, #5fb8ff 0%, #2a8ec8 35%, #0d4d80 75%, #08315a 100%);
+  box-shadow:0 0 40px rgba(0,180,255,0.25);
+  touch-action:none;
+}
+
+/* ── Overlay UI ── */
+.overlay {
+  position:fixed; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:24px;
+  background:rgba(2,17,30,0.86);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  z-index:10;
+  pointer-events:auto;
+}
+.overlay.hidden { display:none; }
+.title {
+  font-size:34px; font-weight:900; letter-spacing:2px;
+  color:#ffd967;
+  text-shadow:0 2px 10px rgba(0,0,0,0.6), 0 0 20px rgba(255,180,60,0.4);
+  margin-bottom:6px;
+  text-align:center;
+}
+.subtitle {
+  font-size:13px; letter-spacing:3px; color:#9fd3ff;
+  margin-bottom:22px;
+}
+.lead {
+  max-width:340px; line-height:1.85; font-size:13.5px; color:#e8f1ff;
+  margin-bottom:22px; text-align:center;
+}
+.lead .em { color:#ffd967; font-weight:700; }
+
+.btn {
+  background:linear-gradient(180deg,#ff7a3a,#cc4a1a);
+  color:#fff; font-size:16px; font-weight:800; letter-spacing:2px;
+  border:none; padding:14px 38px;
+  border-radius:30px;
+  box-shadow:0 4px 16px rgba(255,100,40,0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+  cursor:pointer;
+  transition:transform .08s, filter .15s;
+  font-family:inherit;
+}
+.btn:hover { filter:brightness(1.1); }
+.btn:active { transform:translateY(1px); }
+.btn.ghost {
+  background:transparent;
+  border:1px solid #5e8ab0; color:#bcd6ee;
+  box-shadow:none;
+  padding:10px 22px; font-size:13px; letter-spacing:1px;
+  margin-top:14px;
+}
+
+/* ── HUD ── */
+#hud {
+  position:fixed; top:0; left:0; right:0;
+  display:flex; justify-content:flex-end; gap:8px;
+  padding:14px 38px 14px 16px; pointer-events:none; z-index:5;
+  font-size:12px; letter-spacing:1px; color:#fff;
+  text-shadow:0 1px 4px rgba(0,0,0,0.7);
+}
+#hud .stat {
+  background:rgba(0,20,40,0.5); padding:6px 12px; border-radius:14px;
+  border:1px solid rgba(255,255,255,0.15);
+}
+#progressWrap {
+  position:fixed; top:54px; right:14px;
+  width:8px; height:60vh; max-height:480px;
+  background:rgba(0,30,60,0.6);
+  border-radius:6px; overflow:hidden;
+  border:1px solid rgba(255,255,255,0.18);
+  z-index:5;
+}
+#progressBar {
+  position:absolute; bottom:0; left:0; right:0; height:0%;
+  background:linear-gradient(180deg,#ffd967,#ff8a3a);
+  box-shadow:0 0 8px rgba(255,200,80,0.7);
+  transition:height .25s ease-out;
+}
+#zoneLabel {
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  font-size:13px; letter-spacing:6px; color:#ffd967;
+  text-shadow:0 1px 6px rgba(0,0,0,0.8), 0 0 12px rgba(255,200,80,0.5);
+  font-weight:700; pointer-events:none; z-index:5;
+  opacity:0; transition:opacity .8s;
+}
+#zoneLabel.show { opacity:1; }
+
+/* ── Result ── */
+.scroll {
+  background:linear-gradient(180deg,#fff8e1,#f3e3b6);
+  color:#3a2a10;
+  border-radius:12px;
+  padding:22px 24px;
+  max-width:340px; line-height:1.9; font-size:13.5px;
+  box-shadow:0 10px 40px rgba(0,0,0,0.6), inset 0 0 0 1px #c89a52;
+  margin-bottom:18px;
+}
+.scroll .heading { font-size:18px; font-weight:900; color:#7a3a0a; margin-bottom:10px; text-align:center; letter-spacing:2px; }
+.scroll .stats {
+  margin-top:12px; padding-top:12px;
+  border-top:1px dashed #c89a52;
+  display:flex; justify-content:space-around; font-size:12px;
+}
+.scroll .stats b { display:block; font-size:18px; color:#7a3a0a; margin-top:2px; }
+
+/* ── Lang switch ── */
+.langs {
+  position:fixed; top:10px; left:10px; z-index:20;
+  display:flex; gap:2px; background:rgba(0,20,40,0.6);
+  border:1px solid rgba(255,255,255,0.18); border-radius:8px; padding:3px;
+}
+.langs.hidden { display:none; }
+.langs button {
+  background:transparent; border:none; color:#9fd3ff;
+  padding:5px 10px; font-size:11px; font-weight:700; letter-spacing:.5px;
+  border-radius:5px; cursor:pointer; font-family:inherit;
+}
+.langs button.active { background:#ff7a3a; color:#fff; }
+
+@media (max-width: 380px) {
+  .title { font-size:28px; }
+  .subtitle { font-size:11px; letter-spacing:2px; }
+  .lead { font-size:12.5px; }
+  .scroll { font-size:12.5px; padding:18px 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="langs">
+  <button data-lang="ja" class="active">JP</button>
+  <button data-lang="en">EN</button>
+</div>
+
+<div id="stage"><canvas id="c"></canvas></div>
+
+<div id="hud" class="hidden">
+  <div class="stat"><span data-i18n="hudScore">スコア</span> <b id="score">0</b></div>
+  <div class="stat"><span data-i18n="hudFish">🐟</span> <b id="fishCt">0</b></div>
+</div>
+<div id="progressWrap" class="hidden"><div id="progressBar"></div></div>
+<div id="zoneLabel"></div>
+
+<!-- Title screen -->
+<div id="titleScreen" class="overlay">
+  <div class="title" data-i18n="title">鯉の滝登り</div>
+  <div class="subtitle" data-i18n="sub">登竜門の伝説</div>
+  <div class="lead">
+    <span data-i18n="lead1">5月5日、こどもの日。</span><br>
+    <span data-i18n="lead2">空に踊るのぼりは「鯉のぼり」。</span><br>
+    <span data-i18n="lead3">中国・黄河に「龍門の滝」あり。</span><br>
+    <span data-i18n="lead4">登りきった鯉は—</span>
+    <span class="em" data-i18n="lead5">龍となる。</span><br><br>
+    <span data-i18n="lead6">あなたはその鯉。滝を登れ。</span>
+  </div>
+  <button class="btn" id="startBtn" data-i18n="start">START</button>
+  <div style="margin-top:18px;font-size:11px;color:#7da7c8;letter-spacing:1px;">
+    <span data-i18n="ctrlHint">指でドラッグ／矢印キーで移動</span>
+  </div>
+</div>
+
+<!-- End screen -->
+<div id="endScreen" class="overlay hidden">
+  <div class="title" id="endTitle" data-i18n="endWin">龍となれり</div>
+  <div class="scroll">
+    <div class="heading" data-i18n="scrollHead">「登竜門 (とうりゅうもん)」</div>
+    <div data-i18n="scrollBody">黄河上流「龍門」の急流を登り切った鯉は龍に化すという伝説。<br>転じて、立身出世のための関門・難関突破の機会を意味する故事成語。<br><br>こどもの日に鯉のぼりを揚げる風習は、子の健やかな成長と志を願う、この伝説に由来します。</div>
+    <div class="stats">
+      <div><span data-i18n="endScore">スコア</span><b id="finalScore">0</b></div>
+      <div><span data-i18n="endHeight">登った高さ</span><b id="finalHeight">0m</b></div>
+      <div><span data-i18n="endFish">食べた小魚</span><b id="finalFish">0</b></div>
+    </div>
+  </div>
+  <button class="btn" id="retryBtn" data-i18n="retry">もう一度</button>
+  <a class="btn ghost" href="https://pndshch.github.io/" data-i18n="hub">← Pinda Lab</a>
+</div>
+
+<script>
+/* ─────────────────────── i18n ─────────────────────── */
+const I18N = {
+  ja: {
+    title:"鯉の滝登り", sub:"登竜門の伝説",
+    lead1:"5月5日、こどもの日。",
+    lead2:"空に踊るのぼりは「鯉のぼり」。",
+    lead3:"中国・黄河に「龍門の滝」あり。",
+    lead4:"登りきった鯉は—",
+    lead5:"龍となる。",
+    lead6:"あなたはその鯉。滝を登れ。",
+    start:"START",
+    ctrlHint:"指でドラッグ／矢印キーで移動",
+    hudScore:"スコア", hudFish:"🐟",
+    zoneStream:"流れ", zoneRapids:"急流", zoneFalls:"龍門の滝",
+    endWin:"龍となれり", endLose:"流された…",
+    scrollHead:"「登竜門 (とうりゅうもん)」",
+    scrollBody:"黄河上流「龍門」の急流を登り切った鯉は龍に化すという伝説。<br>転じて、立身出世のための関門・難関突破の機会を意味する故事成語。<br><br>こどもの日に鯉のぼりを揚げる風習は、子の健やかな成長と志を願う、この伝説に由来します。",
+    endScore:"スコア", endHeight:"登った高さ", endFish:"食べた小魚",
+    retry:"もう一度",
+    hub:"← Pinda Lab"
+  },
+  en: {
+    title:"Koi Falls", sub:"The Dragon Gate",
+    lead1:"May 5 — Children's Day in Japan.",
+    lead2:"Carp streamers (koinobori) dance in the sky.",
+    lead3:"Legend tells of \"Dragon Gate\" on the Yellow River.",
+    lead4:"The carp who climbs its falls—",
+    lead5:"becomes a dragon.",
+    lead6:"You are that carp. Climb the falls.",
+    start:"START",
+    ctrlHint:"Drag with finger / Arrow keys to move",
+    hudScore:"Score", hudFish:"🐟",
+    zoneStream:"Stream", zoneRapids:"Rapids", zoneFalls:"Dragon Gate",
+    endWin:"You became a Dragon", endLose:"Swept away…",
+    scrollHead:"Tōryūmon — \"Dragon Gate\"",
+    scrollBody:"Legend says any carp that climbs the rapids of \"Dragon Gate\" on the upper Yellow River transforms into a dragon.<br>The phrase has come to mean a critical gateway — a hard challenge whose passage opens the path to greatness.<br><br>Children's Day koinobori (carp streamers) come from this legend: a parent's wish that children grow strong and rise high.",
+    endScore:"Score", endHeight:"Climbed", endFish:"Fish eaten",
+    retry:"Retry",
+    hub:"← Pinda Lab"
+  }
+};
+let LANG = (navigator.language||'ja').startsWith('en') ? 'en' : 'ja';
+function applyI18n(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k = el.dataset.i18n; if(I18N[LANG][k]) el.innerHTML = I18N[LANG][k];
+  });
+  document.querySelectorAll('.langs button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.lang===LANG);
+  });
+}
+document.querySelectorAll('.langs button').forEach(b=>{
+  b.addEventListener('click', ()=>{ LANG=b.dataset.lang; applyI18n(); });
+});
+applyI18n();
+
+/* ─────────────────────── Canvas setup ─────────────────────── */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W=0, H=0, DPR=Math.min(window.devicePixelRatio||1, 2);
+
+function resize(){
+  const maxW = 480, vw = window.innerWidth, vh = window.innerHeight;
+  W = Math.min(vw, maxW);
+  H = vh;
+  canvas.style.width = W+'px';
+  canvas.style.height = H+'px';
+  canvas.width  = Math.round(W*DPR);
+  canvas.height = Math.round(H*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ─────────────────────── Game state ─────────────────────── */
+const STATE = { TITLE:0, PLAY:1, END:2 };
+let state = STATE.TITLE;
+
+const game = {
+  height: 0,            // total height climbed (in world units)
+  goal: 4200,           // total height required to win
+  score: 0,
+  fish: 0,
+  alive: true,
+  won: false,
+  startTime: 0,
+  zone: 0,              // 0=stream, 1=rapids, 2=falls
+  zoneShownAt: -1,
+  shake: 0,
+  transformT: 0,        // dragon transformation animation 0..1
+};
+
+const koi = {
+  x: 0, y: 0,
+  vx: 0, vy: 0,
+  size: 14,             // base radius
+  targetX: 0,
+  hurtT: 0,
+  bodyAng: 0,
+};
+
+let obstacles = [];     // rocks
+let preyFish = [];      // small fish to eat
+let pickups = [];       // lotus / pearl
+let particles = [];
+let bubbles = [];
+let waterStreaks = [];  // background flow lines
+
+function resetGame(){
+  game.height = 0;
+  game.score = 0;
+  game.fish = 0;
+  game.alive = true;
+  game.won = false;
+  game.zone = 0;
+  game.zoneShownAt = -1;
+  game.shake = 0;
+  game.transformT = 0;
+  game.startTime = performance.now();
+
+  koi.x = W/2; koi.y = H*0.72;
+  koi.targetX = koi.x;
+  koi.vx = 0; koi.vy = 0;
+  koi.hurtT = 0;
+  koi.bodyAng = 0;
+  koi.invuln = 0;
+
+  obstacles = [];
+  preyFish = [];
+  pickups = [];
+  particles = [];
+  bubbles = [];
+  waterStreaks = [];
+  for(let i=0;i<28;i++){
+    waterStreaks.push({ x:Math.random()*W, y:Math.random()*H, len:18+Math.random()*40, sp:1+Math.random()*1.5 });
+  }
+  spawnRow = -200;
+  showZoneLabel(0);
+}
+
+/* ─────────────────────── Input ─────────────────────── */
+const keys = {};
+window.addEventListener('keydown', e=>{
+  keys[e.key] = true;
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+}, {passive:false});
+window.addEventListener('keyup',   e=>{ keys[e.key] = false; });
+
+let touching = false;
+function setTargetFromPoint(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  koi.targetX = Math.max(20, Math.min(W-20, clientX - rect.left));
+  // also bias vertical effort; touch held = swim up
+}
+canvas.addEventListener('pointerdown', e=>{
+  if(state!==STATE.PLAY) return;
+  touching = true;
+  setTargetFromPoint(e.clientX, e.clientY);
+  canvas.setPointerCapture(e.pointerId);
+}, {passive:true});
+canvas.addEventListener('pointermove', e=>{
+  if(!touching) return;
+  setTargetFromPoint(e.clientX, e.clientY);
+});
+canvas.addEventListener('pointerup',   ()=>{ touching=false; });
+canvas.addEventListener('pointercancel',()=>{ touching=false; });
+
+/* ─────────────────────── Spawning ─────────────────────── */
+let spawnRow = -200;
+function maybeSpawn(scrollDelta){
+  spawnRow -= scrollDelta;
+  while(spawnRow < -120){
+    spawnRow += 70 + Math.random()*60;
+    const z = currentZoneNum();
+    const y = -50 - Math.random()*30;
+
+    // rocks
+    const rockChance = z===0 ? 0.45 : z===1 ? 0.7 : 0.85;
+    if(Math.random() < rockChance){
+      const count = z===0 ? 1 : (Math.random()<0.5 ? 1 : 2);
+      const used = [];
+      for(let i=0;i<count;i++){
+        let tries=0, x;
+        do { x = 30 + Math.random()*(W-60); tries++; }
+        while(tries<8 && used.some(u=>Math.abs(u-x)<70));
+        used.push(x);
+        const r = 14 + Math.random()*(z===2 ? 22 : 16);
+        obstacles.push({ x, y, r, type:'rock', spin:Math.random()*Math.PI, dx:(Math.random()-.5)*0.2 });
+      }
+    }
+    // prey (small fish)
+    if(Math.random() < 0.55){
+      const x = 30 + Math.random()*(W-60);
+      const dir = Math.random()<0.5 ? -1 : 1;
+      preyFish.push({ x, y:y-Math.random()*40, r:6, dir, sp:0.4+Math.random()*0.6, eaten:false, wig:Math.random()*Math.PI*2 });
+    }
+    // pickups
+    const pickupChance = z===0 ? 0.04 : z===1 ? 0.10 : 0.16;
+    if(Math.random() < pickupChance){
+      const x = 30 + Math.random()*(W-60);
+      const type = Math.random()<0.45 ? 'lotus' : 'pearl';
+      pickups.push({ x, y:y-20, r:11, type, t:0 });
+    }
+  }
+}
+
+/* ─────────────────────── Zones ─────────────────────── */
+function currentZoneNum(){
+  const p = game.height / game.goal;
+  if(p < 0.34) return 0;
+  if(p < 0.68) return 1;
+  return 2;
+}
+function showZoneLabel(z){
+  const lbl = document.getElementById('zoneLabel');
+  const keys = ['zoneStream','zoneRapids','zoneFalls'];
+  lbl.textContent = I18N[LANG][keys[z]];
+  lbl.classList.remove('show');
+  void lbl.offsetWidth;
+  lbl.classList.add('show');
+  setTimeout(()=>lbl.classList.remove('show'), 1700);
+}
+
+/* ─────────────────────── Update ─────────────────────── */
+let last = performance.now();
+function update(now){
+  const dt = Math.min(0.033, (now-last)/1000);
+  last = now;
+
+  // speeds depend on zone
+  const z = currentZoneNum();
+  if(z !== game.zone){ game.zone = z; showZoneLabel(z); }
+  // ambient downward water speed (the "current")
+  const currentSpeed = z===0 ? 110 : z===1 ? 170 : 240;
+
+  if(state === STATE.PLAY && game.alive && !game.won){
+    // ── Input → koi velocity ──
+    let steerX = 0;
+    if(keys['ArrowLeft']  || keys['a'] || keys['A']) steerX -= 1;
+    if(keys['ArrowRight'] || keys['d'] || keys['D']) steerX += 1;
+    let swimUp = touching || keys['ArrowUp'] || keys[' '] || keys['w'] || keys['W'];
+
+    // Touch-driven X target
+    if(touching){
+      const diff = koi.targetX - koi.x;
+      koi.vx += diff * 12 * dt;
+    }
+    if(steerX){ koi.vx += steerX * 600 * dt; }
+    koi.vx *= Math.pow(0.0015, dt); // damping
+    koi.x += koi.vx * dt;
+    if(koi.x < 18){ koi.x=18; koi.vx*=-0.4; }
+    if(koi.x > W-18){ koi.x=W-18; koi.vx*=-0.4; }
+
+    // Vertical: koi position is fixed-ish; we move the world.
+    // While swimming, koi rises (world scrolls down). With current, world scrolls up.
+    // Tuned so net climb stays positive in every zone, but slower as it gets harder.
+    const swimPower = swimUp ? (z===0 ? 200 : z===1 ? 230 : 280) : 0;
+    const netUpSpeed = swimPower - currentSpeed; // positive = climbing
+    const climb = netUpSpeed * dt; // world delta
+    if(climb > 0) game.height += climb;
+    else game.height = Math.max(0, game.height + climb);
+
+    // Score from height
+    game.score = Math.floor(game.height);
+
+    // koi visual bob
+    koi.y += (H*0.72 - koi.y)*0.08;
+
+    // body angle
+    const tx = climb>0 ? -0.18 : 0.18;
+    koi.bodyAng += (tx - koi.bodyAng)*0.06;
+
+    // Spawn obstacles based on world delta
+    maybeSpawn(climb);
+
+    // Move obstacles relative to scrolling. If climbing up, obstacles move down
+    // (toward the koi from above). If sliding back, they move up (away).
+    const worldShift = climb;
+    for(const o of obstacles){
+      o.y += worldShift;
+      o.x += o.dx;
+      if(o.x<10||o.x>W-10) o.dx*=-1;
+      o.spin += dt*0.6;
+    }
+    for(const p of preyFish){
+      if(p.eaten) continue;
+      p.y += worldShift;
+      p.wig += dt*6;
+      p.x += Math.sin(p.wig)*0.4 + p.dir * p.sp;
+      if(p.x<14||p.x>W-14) p.dir*=-1;
+    }
+    for(const u of pickups){ u.y += worldShift; u.t += dt; }
+
+    // Cleanup off-screen
+    obstacles = obstacles.filter(o=>o.y < H+60 && o.y > -300);
+    preyFish  = preyFish.filter(p=>p.y < H+40 && p.y > -300 && !p.eaten);
+    pickups   = pickups.filter(u=>u.y < H+40 && u.y > -300 && !u.taken);
+
+    // Bubbles
+    if(Math.random() < (climb>0 ? 0.6 : 0.15)){
+      bubbles.push({ x: koi.x + (Math.random()-0.5)*16, y: koi.y+10, r:2+Math.random()*3, vy:-30-Math.random()*40, life:1.4 });
+    }
+    for(const b of bubbles){ b.y += b.vy*dt; b.life -= dt; }
+    bubbles = bubbles.filter(b=>b.life>0);
+
+    // Water streaks (background flow)
+    for(const s of waterStreaks){
+      s.y += (currentSpeed*0.7) * s.sp * dt;
+      if(s.y > H+20){ s.y = -20; s.x = Math.random()*W; }
+    }
+
+    // Particles
+    for(const p of particles){ p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=200*dt; p.life-=dt; }
+    particles = particles.filter(p=>p.life>0);
+
+    // Collisions
+    if(koi.invuln>0) koi.invuln -= dt;
+    for(const o of obstacles){
+      const dx = o.x-koi.x, dy = o.y-koi.y;
+      const rr = o.r + koi.size*0.7;
+      if(dx*dx+dy*dy < rr*rr){
+        if(koi.invuln<=0){
+          koi.hurtT = 0.5;
+          game.shake = 8;
+          koi.vx = -Math.sign(dx) * 280;
+          // lose progress
+          game.height = Math.max(0, game.height - 80);
+          // particles
+          for(let i=0;i<10;i++){
+            particles.push({ x:koi.x, y:koi.y, vx:(Math.random()-0.5)*200, vy:-60-Math.random()*120, life:0.6, c:'#ff4040' });
+          }
+          koi.invuln = 0.7;
+        }
+      }
+    }
+    for(const p of preyFish){
+      if(p.eaten) continue;
+      const dx = p.x-koi.x, dy=p.y-koi.y;
+      const rr = p.r + koi.size*0.8;
+      if(dx*dx+dy*dy < rr*rr){
+        p.eaten = true;
+        game.fish++;
+        game.score += 50;
+        for(let i=0;i<8;i++){
+          particles.push({ x:p.x, y:p.y, vx:(Math.random()-0.5)*120, vy:-30-Math.random()*80, life:0.5, c:'#ffe066' });
+        }
+      }
+    }
+    for(const u of pickups){
+      if(u.taken) continue;
+      const dx = u.x-koi.x, dy=u.y-koi.y;
+      const rr = u.r + koi.size*0.8;
+      if(dx*dx+dy*dy < rr*rr){
+        u.taken = true;
+        if(u.type==='pearl'){ koi.invuln = 3.0; game.score += 200; }
+        else { /* lotus: small boost */ game.height += 200; game.score += 100; }
+        for(let i=0;i<14;i++){
+          particles.push({ x:u.x, y:u.y, vx:(Math.random()-0.5)*180, vy:-60-Math.random()*120, life:0.7, c: u.type==='pearl'?'#cfe9ff':'#ffb0d6' });
+        }
+      }
+    }
+    pickups = pickups.filter(u=>!u.taken);
+
+    if(koi.hurtT>0) koi.hurtT -= dt;
+    game.shake *= 0.85;
+
+    // Win check
+    if(game.height >= game.goal){
+      game.won = true;
+      game.transformT = 0;
+    }
+  } else if(game.won){
+    game.transformT = Math.min(1, game.transformT + dt*0.6);
+    if(game.transformT >= 1 && state===STATE.PLAY){
+      // Show end screen
+      setTimeout(()=>showEnd(true), 600);
+      state = STATE.END; // prevent reentry
+    }
+  }
+
+  // HUD
+  document.getElementById('score').textContent = game.score;
+  document.getElementById('fishCt').textContent = game.fish;
+  document.getElementById('progressBar').style.height = Math.min(100, (game.height/game.goal*100)).toFixed(1)+'%';
+}
+
+/* ─────────────────────── Drawing ─────────────────────── */
+function draw(){
+  ctx.save();
+  // shake
+  if(game.shake>0.2){
+    ctx.translate((Math.random()-0.5)*game.shake, (Math.random()-0.5)*game.shake);
+  }
+
+  // background gradient is on canvas CSS already; add water motion overlay
+  // streaks
+  ctx.lineWidth = 2;
+  for(const s of waterStreaks){
+    const alpha = 0.18 + (s.sp-1)*0.18;
+    ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(s.x, s.y + s.len);
+    ctx.stroke();
+  }
+
+  // foam at top edge (waterfall feel)
+  const z = currentZoneNum();
+  if(z>=1){
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(0, 0, W, 60);
+  }
+
+  // pickups (drawn behind koi)
+  for(const u of pickups){
+    if(u.taken) continue;
+    if(u.type==='pearl'){
+      const grd = ctx.createRadialGradient(u.x-3, u.y-3, 1, u.x, u.y, u.r);
+      grd.addColorStop(0, '#ffffff');
+      grd.addColorStop(0.5, '#cfe9ff');
+      grd.addColorStop(1, '#7da7c8');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(u.x, u.y, u.r, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth=1; ctx.stroke();
+    } else { // lotus
+      ctx.save();
+      ctx.translate(u.x, u.y);
+      ctx.rotate(Math.sin(u.t*1.5)*0.1);
+      for(let i=0;i<6;i++){
+        ctx.rotate(Math.PI/3);
+        ctx.fillStyle = '#ffb6cf';
+        ctx.beginPath();
+        ctx.ellipse(0, -u.r*0.8, u.r*0.6, u.r, 0, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#fff5b8';
+      ctx.beginPath(); ctx.arc(0,0,u.r*0.4,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // prey fish
+  for(const p of preyFish){
+    if(p.eaten) continue;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(p.dir, 1);
+    ctx.fillStyle = '#dfeefb';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, p.r*1.3, p.r*0.7, 0, 0, Math.PI*2);
+    ctx.fill();
+    // tail
+    ctx.beginPath();
+    ctx.moveTo(-p.r*1.2, 0);
+    ctx.lineTo(-p.r*2.0, -p.r*0.6);
+    ctx.lineTo(-p.r*2.0,  p.r*0.6);
+    ctx.closePath();
+    ctx.fill();
+    // eye
+    ctx.fillStyle = '#1a2030';
+    ctx.beginPath(); ctx.arc(p.r*0.5, -p.r*0.15, 1.2, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // rocks
+  for(const o of obstacles){
+    ctx.save();
+    ctx.translate(o.x, o.y);
+    ctx.rotate(o.spin);
+    // shadow
+    const grd = ctx.createRadialGradient(-o.r*0.4, -o.r*0.4, 1, 0, 0, o.r);
+    grd.addColorStop(0, '#7a8794');
+    grd.addColorStop(0.6, '#4a5562');
+    grd.addColorStop(1, '#1f2a36');
+    ctx.fillStyle = grd;
+    ctx.beginPath();
+    // rough rock polygon
+    const pts = 7;
+    for(let i=0;i<pts;i++){
+      const a = (i/pts)*Math.PI*2;
+      const r = o.r*(0.85+Math.sin(i*1.7)*0.18);
+      const x = Math.cos(a)*r, y = Math.sin(a)*r;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    // moss highlight
+    ctx.fillStyle = 'rgba(60,160,90,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(-o.r*0.2, -o.r*0.5, o.r*0.5, o.r*0.18, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // bubbles
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  for(const b of bubbles){
+    ctx.globalAlpha = Math.max(0, b.life/1.4);
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // KOI (or DRAGON)
+  drawKoi();
+
+  // particles (foreground)
+  for(const p of particles){
+    ctx.fillStyle = p.c;
+    ctx.globalAlpha = Math.max(0, p.life/0.7);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+function drawKoi(){
+  const t = performance.now()/1000;
+  const trans = game.transformT; // 0..1
+  const scale = 1 + trans*0.6;
+  ctx.save();
+  ctx.translate(koi.x, koi.y);
+  ctx.rotate(koi.bodyAng);
+  ctx.scale(scale, scale);
+
+  // Glow during hurt or invuln
+  if(koi.invuln>0){
+    ctx.shadowColor = '#9ddcff'; ctx.shadowBlur = 14;
+  } else if(koi.hurtT>0){
+    ctx.shadowColor = '#ff5050'; ctx.shadowBlur = 12;
+  } else if(trans>0){
+    ctx.shadowColor = '#ffd967'; ctx.shadowBlur = 18 + trans*16;
+  }
+
+  const wig = Math.sin(t*8)*0.18;
+  const r = koi.size;
+
+  // tail (drawn first)
+  ctx.save();
+  ctx.translate(0, r*1.05);
+  ctx.rotate(wig);
+  ctx.fillStyle = lerpCol('#ff7a3a','#ffd967',trans);
+  ctx.beginPath();
+  ctx.moveTo(-r*0.8, 0);
+  ctx.quadraticCurveTo(0, r*1.4, r*0.8, 0);
+  ctx.quadraticCurveTo(0, r*0.4, -r*0.8, 0);
+  ctx.fill();
+  // tail fin lines
+  ctx.strokeStyle = 'rgba(160,40,10,0.5)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0, r*0.4); ctx.lineTo(0, r*1.2); ctx.stroke();
+  ctx.restore();
+
+  // body
+  ctx.fillStyle = lerpCol('#ff7a3a','#ffe07a',trans);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r*0.85, r*1.15, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // belly (lighter)
+  ctx.fillStyle = lerpCol('#fff0d8','#ffffff',trans);
+  ctx.beginPath();
+  ctx.ellipse(0, r*0.15, r*0.55, r*0.85, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // koi pattern spots
+  ctx.fillStyle = lerpCol('#ffffff','#ffeb99',trans);
+  ctx.beginPath(); ctx.ellipse(-r*0.3, -r*0.3, r*0.18, r*0.22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse( r*0.25, -r*0.55, r*0.13, r*0.16, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#a02818';
+  ctx.beginPath(); ctx.ellipse( r*0.0,  r*0.4, r*0.16, r*0.20, 0, 0, Math.PI*2); ctx.fill();
+
+  // side fins
+  const finWig = Math.sin(t*7)*0.3;
+  ctx.fillStyle = lerpCol('#ff8a4a','#ffe07a',trans);
+  ctx.save(); ctx.translate(-r*0.7, r*0.1); ctx.rotate(-0.7+finWig);
+  ctx.beginPath(); ctx.ellipse(0,0, r*0.5, r*0.22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.translate( r*0.7, r*0.1); ctx.rotate(0.7-finWig);
+  ctx.beginPath(); ctx.ellipse(0,0, r*0.5, r*0.22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // head (top of body) – when transforming, becomes dragon-like
+  if(trans>0.1){
+    // whiskers
+    ctx.strokeStyle = `rgba(255,240,160,${0.4+trans*0.6})`; ctx.lineWidth = 2;
+    for(const s of [-1, 1]){
+      ctx.beginPath();
+      ctx.moveTo(s*r*0.4, -r*0.95);
+      ctx.quadraticCurveTo(s*r*1.6, -r*1.2 + Math.sin(t*3+s)*3, s*r*2.0, -r*1.9 + Math.sin(t*4+s)*5);
+      ctx.stroke();
+    }
+    // horns
+    ctx.fillStyle = `rgba(255,210,90,${0.5+trans*0.5})`;
+    for(let i=-1;i<=1;i+=2){
+      ctx.beginPath();
+      ctx.moveTo(i*r*0.25, -r*0.95);
+      ctx.lineTo(i*r*0.55, -r*1.6);
+      ctx.lineTo(i*r*0.05, -r*1.25);
+      ctx.closePath(); ctx.fill();
+    }
+    // mane (flowing)
+    ctx.strokeStyle = `rgba(255,170,40,${0.6*trans})`; ctx.lineWidth = 3;
+    for(let i=0;i<5;i++){
+      const ang = -Math.PI/2 + (i-2)*0.18;
+      ctx.beginPath();
+      ctx.moveTo(0, -r*0.9);
+      ctx.quadraticCurveTo(
+        Math.cos(ang)*r*1.1, Math.sin(ang)*r*1.1 + Math.sin(t*3+i)*2,
+        Math.cos(ang)*r*1.8, Math.sin(ang)*r*1.8 + Math.sin(t*2+i)*4
+      );
+      ctx.stroke();
+    }
+    // gold scale shimmer overlay
+    ctx.fillStyle = `rgba(255,230,150,${0.15*trans})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, r*0.85, r*1.15, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  // eye
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(r*0.30, -r*0.65, r*0.14, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#1a1a26'; ctx.beginPath(); ctx.arc(r*0.32, -r*0.62, r*0.08, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function lerpCol(a, b, t){
+  const ah = parseInt(a.slice(1),16), bh = parseInt(b.slice(1),16);
+  const ar=(ah>>16)&255, ag=(ah>>8)&255, ab=ah&255;
+  const br=(bh>>16)&255, bg=(bh>>8)&255, bb=bh&255;
+  const r=Math.round(ar+(br-ar)*t), g=Math.round(ag+(bg-ag)*t), bl=Math.round(ab+(bb-ab)*t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+/* ─────────────────────── Loop ─────────────────────── */
+function loop(now){
+  update(now);
+  // clear (use a transparent clear so the CSS gradient shows)
+  ctx.clearRect(0,0,W,H);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ─────────────────────── UI Hooks ─────────────────────── */
+function showEnd(won){
+  game.won = won;
+  document.getElementById('finalScore').textContent  = game.score;
+  const heightM = Math.round(game.height/40);
+  document.getElementById('finalHeight').textContent = heightM+'m';
+  document.getElementById('finalFish').textContent   = game.fish;
+  document.getElementById('endTitle').textContent = I18N[LANG][won?'endWin':'endLose'];
+  document.getElementById('endScreen').classList.remove('hidden');
+  document.querySelector('.langs').classList.remove('hidden');
+}
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  document.getElementById('titleScreen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('progressWrap').classList.remove('hidden');
+  document.querySelector('.langs').classList.add('hidden');
+  state = STATE.PLAY;
+  resetGame();
+});
+document.getElementById('retryBtn').addEventListener('click', ()=>{
+  document.getElementById('endScreen').classList.add('hidden');
+  state = STATE.PLAY;
+  resetGame();
+});
+</script>
+</body>
+</html>
